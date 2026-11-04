@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadAppParametersOnly",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
+      "Resource": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/cloudops/${ENV_NAME}/*"
+    },
+    {
+      "Sid": "DecryptParametersWithDefaultKey",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT_ID}:key/*",
+      "Condition": { "StringEquals": { "kms:ViaService": "ssm.${AWS_REGION}.amazonaws.com" } }
+    },
+    {
+      "Sid": "ReadStaticAssetsBucket",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::${ASSET_BUCKET}",
+        "arn:aws:s3:::${ASSET_BUCKET}/*"
+      ]
+    },
+    {
+      "Sid": "ShipLogsAndMetricsToCloudWatch",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
