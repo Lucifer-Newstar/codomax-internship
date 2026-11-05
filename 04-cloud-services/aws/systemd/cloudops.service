@@ -1,0 +1,29 @@
+# /etc/systemd/system/cloudops.service — gunicorn running the CloudOps Notes app.
+# Secrets come from the EnvironmentFile (root-only, 0600) written by deploy_app.sh from SSM.
+[Unit]
+Description=CloudOps Notes (gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cloudops
+Group=cloudops
+WorkingDirectory=/opt/cloudops/app
+EnvironmentFile=/etc/cloudops/app.env
+ExecStart=/opt/cloudops/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 2 --timeout 30 \
+          --access-logfile - --error-logfile - wsgi:app
+Restart=on-failure
+RestartSec=3
+# Logs go to a file so the CloudWatch agent can ship them (journald is also kept).
+StandardOutput=append:/var/log/cloudops/app.log
+StandardError=append:/var/log/cloudops/app.log
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/cloudops
+
+[Install]
+WantedBy=multi-user.target
