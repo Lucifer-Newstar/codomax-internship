@@ -10,6 +10,7 @@ Everything was done on **AlmaLinux 9** (RHEL-compatible: `dnf`, `firewalld`, `sy
 | 1 | Learn Linux CLI operations, files/permissions, users, groups, process management, services, and SSH keys | [`01-linux-cli/`](01-linux-cli/) |
 | 2 | Learn IP addressing, DNS setup, ports, firewalls, and security group configurations | [`02-networking/`](02-networking/) |
 | 3 | Deploy a Linux server: Create VM → Configure Linux → Secure Access → Deploy Service → Test Connectivity | [`03-linux-server-deploy/`](03-linux-server-deploy/) |
+| 4 | Cloud services & web app deployment: EC2, S3, RDS, VPC, IAM, CloudWatch, SSM secrets, cost control — the **CloudOps Notes** app goes live on AWS | [`04-cloud-services/`](04-cloud-services/) |
 
 ## Repo map
 

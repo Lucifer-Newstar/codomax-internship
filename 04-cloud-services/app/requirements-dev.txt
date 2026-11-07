@@ -1,0 +1,4 @@
+# Test / lint tooling (not installed in the production image).
+-r requirements.txt
+pytest==9.0.3
+ruff==0.14.6

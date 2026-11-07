@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CloudOps Notes</title>
+  {# Static files come from the app itself, or from S3 when ASSET_BASE_URL is set (module 03, S3 demo). #}
+  {% set static_base = asset_base_url if asset_base_url else url_for('static', filename='')|trim('/') %}
+  <link rel="stylesheet" href="{{ static_base }}/style.css">
+</head>
+<body>
+  <header>
+    <h1>CloudOps Notes</h1>
+    <p class="sub">Codomax internship demo app &middot; v{{ version }} &middot; <span class="env env-{{ app_env }}">{{ app_env }}</span></p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Status</h2>
+      <ul id="status">
+        <li>App: <span id="st-app">checking…</span></li>
+        <li>Database: <span id="st-db">checking…</span></li>
+        <li>Host: <span id="st-host">–</span></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Add a note</h2>
+      <form id="note-form">
+        <input id="title" name="title" maxlength="120" placeholder="Title" required>
+        <textarea id="body" name="body" maxlength="5000" rows="3" placeholder="Body (optional)"></textarea>
+        <button type="submit">Save</button>
+        <span id="form-msg" class="msg"></span>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Notes <small id="count"></small></h2>
+      <ul id="notes" class="notes"></ul>
+    </section>
+  </main>
+
+  <footer>
+    API: <code>GET /api/notes</code> &middot; <code>POST /api/notes</code> &middot; <code>GET /health</code> &middot; <code>GET /health/ready</code> &middot; <code>GET /api/info</code>
+  </footer>
+  <script src="{{ static_base }}/app.js"></script>
+</body>
+</html>
