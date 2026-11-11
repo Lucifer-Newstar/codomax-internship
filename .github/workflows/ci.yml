@@ -47,7 +47,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null
           # -x follows `source` so lib/common.sh is checked in context
-          find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck -x
+          find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck -x -P SCRIPTDIR:.
 
       - name: hadolint Dockerfiles
         uses: hadolint/hadolint-action@v3.1.0
