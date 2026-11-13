@@ -1,0 +1,10 @@
+{
+  "_comment": "/etc/docker/daemon.json on the EC2 host: every container's stdout goes to CloudWatch. Needs logs:CreateLogGroup/CreateLogStream/PutLogEvents on the instance role.",
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "ap-south-1",
+    "awslogs-group": "/cloudops/docker",
+    "awslogs-create-group": "true"
+  },
+  "live-restore": true
+}

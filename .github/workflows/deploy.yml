@@ -1,0 +1,185 @@
+# CD — deploys ONLY from main (the production branch), after CI has passed.
+#   1. build the image and push it to GitHub Container Registry (ghcr.io) tagged with the commit sha
+#   2. assume an AWS IAM role through OIDC (no long-lived keys stored in GitHub)
+#   3. tell the EC2 instance to pull + restart via SSM Run Command (no SSH port, no key file)
+#   4. verify: /health/ready must answer 200 and /api/info must report the deployed sha
+#
+# Required repository *variables* (Settings → Secrets and variables → Actions → Variables):
+#   AWS_REGION        e.g. ap-south-1
+#   AWS_ROLE_ARN      arn:aws:iam::<account>:role/cloudops-github-deploy   (created by 06-…/aws/github_oidc_setup.sh)
+#   EC2_INSTANCE_ID   i-0123456789abcdef0   (instance bootstrapped with 06-…/deploy/ec2-docker-bootstrap.sh)
+#   APP_URL           http://<public-ip-or-dns>
+# No secrets are needed: ghcr uses GITHUB_TOKEN, AWS uses OIDC, the DB password lives in SSM on the AWS side.
+# If AWS_ROLE_ARN is not set the deploy job is skipped with a notice, so forks and PR checks stay green.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "04-cloud-services/app/**"
+      - "05-docker-containerization/Dockerfile"
+      - "06-devops-cicd-monitoring/deploy/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing image tag to (re)deploy, e.g. a previous sha for rollback. Empty = build from this commit."
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false        # never cancel a half-finished deploy
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/cloudops-notes
+
+jobs:
+  ci:
+    name: Run CI first
+    if: github.event.inputs.image_tag == ''
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  build-push:
+    name: Build & push image to GHCR
+    needs: ci
+    if: always() && (needs.ci.result == 'success' || needs.ci.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: decide which tag to deploy
+        id: meta
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.meta.outputs.build == 'true'
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.meta.outputs.build == 'true'
+
+      - name: login to ghcr.io
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: lowercase image name (ghcr requires it)
+        id: img
+        run: echo "name=${IMAGE,,}" >> "$GITHUB_OUTPUT"
+
+      - name: build and push
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: 04-cloud-services/app
+          file: 05-docker-containerization/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.img.outputs.name }}:latest
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  deploy:
+    name: Deploy to EC2 via SSM
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    permissions:
+      id-token: write        # needed to mint the OIDC token for AWS
+      contents: read
+    steps:
+      - name: check deployment configuration
+        id: cfg
+        run: |
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ] || [ -z "${{ vars.EC2_INSTANCE_ID }}" ] || [ -z "${{ vars.APP_URL }}" ]; then
+            echo "::notice::AWS_ROLE_ARN / EC2_INSTANCE_ID / APP_URL variables not set — skipping deployment."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: configure AWS credentials (OIDC)
+        if: steps.cfg.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-deploy-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: send deploy command to the instance
+        if: steps.cfg.outputs.configured == 'true'
+        id: ssm
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/cloudops-notes:${{ needs.build-push.outputs.tag }}
+        run: |
+          IMAGE_REF="${IMAGE_REF,,}"
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.EC2_INSTANCE_ID }}" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${{ github.sha }} by ${{ github.actor }}" \
+            --timeout-seconds 600 \
+            --parameters "commands=[\"sudo /opt/cloudops/deploy.sh ${IMAGE_REF} ${{ github.sha }}\"]" \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command: $CMD_ID"
+
+      - name: wait for the command and show its output
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          CMD_ID="${{ steps.ssm.outputs.command_id }}"
+          for _ in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" \
+                     --instance-id "${{ vars.EC2_INSTANCE_ID }}" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut) echo "::error::deploy command $STATUS"; break ;;
+            esac
+            sleep 10
+          done
+          echo "## Instance output" >> "$GITHUB_STEP_SUMMARY"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ vars.EC2_INSTANCE_ID }}" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json | tee /tmp/inv.json
+          { echo '```'; python3 -c 'import json;d=json.load(open("/tmp/inv.json"));print(d["Stdout"][-3000:]);print(d["Stderr"][-1000:])'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$STATUS" = "Success" ]
+
+      - name: verify deployment health
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          URL="${{ vars.APP_URL }}"
+          for _ in $(seq 1 30); do
+            if curl -fsS --max-time 5 "$URL/health/ready" >/tmp/ready.json 2>/dev/null; then
+              cat /tmp/ready.json; echo
+              SHA=$(curl -fsS "$URL/api/info" | python3 -c 'import json,sys;print(json.load(sys.stdin)["git_sha"])')
+              echo "running git_sha=$SHA expected=${{ github.sha }}"
+              if [ "${{ github.event.inputs.image_tag }}" = "" ] && [ "$SHA" != "${{ github.sha }}" ]; then
+                echo "::error::instance reports a different build ($SHA)"; exit 1
+              fi
+              echo "### Deployed ${{ github.sha }} to $URL ✅" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::$URL/health/ready did not become healthy within 150s. Check: aws ssm start-session --target ${{ vars.EC2_INSTANCE_ID }} ; docker compose -f /opt/cloudops/docker-compose.yml logs"
+          exit 1

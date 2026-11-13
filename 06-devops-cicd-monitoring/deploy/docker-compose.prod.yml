@@ -1,0 +1,76 @@
+# Production compose file installed at /opt/cloudops/docker-compose.yml on the EC2 instance.
+# Differences from the local file in 05-docker-containerization/:
+#   - web uses the image pushed by CI (ghcr.io/...:<sha>) instead of a local build
+#   - postgres runs here too (cheapest option) — swap DB_HOST for the RDS endpoint to use module 03's RDS
+#   - container logs go to CloudWatch through the awslogs driver (instance role grants logs:*)
+name: cloudops
+
+x-logging: &cw-logging
+  driver: awslogs
+  options:
+    awslogs-group: /cloudops/docker
+    awslogs-create-group: "true"
+    awslogs-stream: "{{.Name}}"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cloudops}
+      POSTGRES_USER: ${POSTGRES_USER:-cloudops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *cw-logging
+
+  web:
+    image: ${IMAGE:?set IMAGE to ghcr.io/<owner>/cloudops-notes:<tag>}
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:?missing}
+      GIT_SHA: ${GIT_SHA:-unknown}
+      LOG_FORMAT: json
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-cloudops}
+      DB_USER: ${POSTGRES_USER:-cloudops}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, edge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *cw-logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: ["80:80"]
+    volumes:
+      - /opt/cloudops/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [edge]
+    logging: *cw-logging
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
