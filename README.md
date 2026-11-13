@@ -12,6 +12,7 @@ Everything was done on **AlmaLinux 9** (RHEL-compatible: `dnf`, `firewalld`, `sy
 | 3 | Deploy a Linux server: Create VM → Configure Linux → Secure Access → Deploy Service → Test Connectivity | [`03-linux-server-deploy/`](03-linux-server-deploy/) |
 | 4 | Cloud services & web app deployment: EC2, S3, RDS, VPC, IAM, CloudWatch, SSM secrets, cost control — the **CloudOps Notes** app goes live on AWS | [`04-cloud-services/`](04-cloud-services/) |
 | 5 | Docker & containerization: multi-stage image, compose stack (nginx → app → PostgreSQL), volumes, networking | [`05-docker-containerization/`](05-docker-containerization/) |
+| 6 | DevOps, CI/CD & monitoring: GitHub Actions CI (lint, tests, image), CD to EC2 via OIDC + SSM, container logs, CloudWatch | [`06-devops-cicd-monitoring/`](06-devops-cicd-monitoring/) |
 
 ## Repo map
 
