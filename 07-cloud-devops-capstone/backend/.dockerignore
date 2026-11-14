@@ -1,0 +1,13 @@
+# Keep the build context (04-cloud-services/app) small and secret-free.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+*.md
+.git/
