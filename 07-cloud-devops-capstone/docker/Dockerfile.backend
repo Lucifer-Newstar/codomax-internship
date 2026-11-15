@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.7
+# Capstone backend image. Build from the capstone root:
+#   docker build -f docker/Dockerfile.backend -t cloudops-api:dev .
+ARG PYTHON_VERSION=3.12
+
+FROM python:${PYTHON_VERSION}-slim AS builder
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build
+COPY backend/requirements.txt .
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --upgrade pip && /opt/venv/bin/pip install -r requirements.txt
+
+FROM python:${PYTHON_VERSION}-slim AS runtime
+ARG GIT_SHA=unknown
+ARG APP_VERSION=2.0.0
+LABEL org.opencontainers.image.title="cloudops-api" \
+      org.opencontainers.image.source="https://github.com/Lucifer-Newstar/codomax-internship" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="${APP_VERSION}"
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH" \
+    APP_PORT=8000 GIT_SHA=${GIT_SHA} APP_VERSION=${APP_VERSION}
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=app:app backend/cloudops_api ./cloudops_api
+COPY --chown=app:app backend/wsgi.py ./wsgi.py
+COPY --chown=app:app database/init.sql ./cloudops_api/init.sql
+USER app
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${APP_PORT}/health" || exit 1
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${APP_PORT} --workers 2 --threads 2 --timeout 30 --error-logfile - wsgi:app"]
