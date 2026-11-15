@@ -1,0 +1,67 @@
+# Local / development stack for the capstone:  cd docker && cp .env.example .env && docker compose up -d --build
+name: cloudops-capstone
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cloudops}
+      POSTGRES_USER: ${POSTGRES_USER:-cloudops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+      args: { GIT_SHA: "${GIT_SHA:-dev}", APP_VERSION: "${APP_VERSION:-2.0.0}" }
+    image: cloudops-api:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in docker/.env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: json
+      DB_HOST: db
+      DB_NAME: ${POSTGRES_DB:-cloudops}
+      DB_USER: ${POSTGRES_USER:-cloudops}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SSLMODE: disable
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend, edge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+      args: { GIT_SHA: "${GIT_SHA:-dev}" }
+    image: cloudops-ui:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    ports: ["${HTTP_PORT:-8080}:8080"]
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [edge]
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
