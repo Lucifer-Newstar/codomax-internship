@@ -1,5 +1,5 @@
 # CD — deploys ONLY from main (the production branch), after CI has passed.
-#   1. build the image and push it to GitHub Container Registry (ghcr.io) tagged with the commit sha
+#   1. build the capstone images (api + ui) and push them to ghcr.io tagged with the commit sha
 #   2. assume an AWS IAM role through OIDC (no long-lived keys stored in GitHub)
 #   3. tell the EC2 instance to pull + restart via SSM Run Command (no SSH port, no key file)
 #   4. verify: /health/ready must answer 200 and /api/info must report the deployed sha
@@ -7,7 +7,7 @@
 # Required repository *variables* (Settings → Secrets and variables → Actions → Variables):
 #   AWS_REGION        e.g. ap-south-1
 #   AWS_ROLE_ARN      arn:aws:iam::<account>:role/cloudops-github-deploy   (created by 06-…/aws/github_oidc_setup.sh)
-#   EC2_INSTANCE_ID   i-0123456789abcdef0   (instance bootstrapped with 06-…/deploy/ec2-docker-bootstrap.sh)
+#   EC2_INSTANCE_ID   i-0123456789abcdef0   (output of 07-…/infrastructure/scripts/deploy_stack.sh up)
 #   APP_URL           http://<public-ip-or-dns>
 # No secrets are needed: ghcr uses GITHUB_TOKEN, AWS uses OIDC, the DB password lives in SSM on the AWS side.
 # If AWS_ROLE_ARN is not set the deploy job is skipped with a notice, so forks and PR checks stay green.
@@ -17,9 +17,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "04-cloud-services/app/**"
-      - "05-docker-containerization/Dockerfile"
-      - "06-devops-cicd-monitoring/deploy/**"
+      - "07-cloud-devops-capstone/backend/**"
+      - "07-cloud-devops-capstone/frontend/**"
+      - "07-cloud-devops-capstone/database/**"
+      - "07-cloud-devops-capstone/docker/**"
+      - "07-cloud-devops-capstone/infrastructure/scripts/deploy.sh"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
@@ -33,7 +35,7 @@ concurrency:
   cancel-in-progress: false        # never cancel a half-finished deploy
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/cloudops-notes
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   ci:
@@ -79,24 +81,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: lowercase image name (ghcr requires it)
+      - name: lowercase registry path (ghcr requires it)
         id: img
-        run: echo "name=${IMAGE,,}" >> "$GITHUB_OUTPUT"
+        run: echo "registry=${REGISTRY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: build and push
+      - name: build and push capstone API image
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: 07-cloud-devops-capstone
+          file: 07-cloud-devops-capstone/docker/Dockerfile.backend
+          push: true
+          tags: |
+            ${{ steps.img.outputs.registry }}/cloudops-api:${{ steps.meta.outputs.tag }}
+            ${{ steps.img.outputs.registry }}/cloudops-api:latest
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: false
+
+      - name: build and push capstone UI image
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: 07-cloud-devops-capstone
+          file: 07-cloud-devops-capstone/docker/Dockerfile.frontend
+          push: true
+          tags: |
+            ${{ steps.img.outputs.registry }}/cloudops-ui:${{ steps.meta.outputs.tag }}
+            ${{ steps.img.outputs.registry }}/cloudops-ui:latest
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+          provenance: false
+
+      - name: build and push module 04 notes image (kept for the docker module demo)
         if: steps.meta.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: 04-cloud-services/app
           file: 05-docker-containerization/Dockerfile
           push: true
-          tags: |
-            ${{ steps.img.outputs.name }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.img.outputs.name }}:latest
+          tags: ${{ steps.img.outputs.registry }}/cloudops-notes:${{ steps.meta.outputs.tag }}
           build-args: |
             GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=notes
+          cache-to: type=gha,mode=max,scope=notes
           provenance: false
 
   deploy:
@@ -132,15 +164,15 @@ jobs:
         if: steps.cfg.outputs.configured == 'true'
         id: ssm
         env:
-          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/cloudops-notes:${{ needs.build-push.outputs.tag }}
+          TAG: ${{ needs.build-push.outputs.tag }}
         run: |
-          IMAGE_REF="${IMAGE_REF,,}"
+          REG="${REGISTRY,,}"
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.EC2_INSTANCE_ID }}" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${{ github.sha }} by ${{ github.actor }}" \
             --timeout-seconds 600 \
-            --parameters "commands=[\"sudo /opt/cloudops/deploy.sh ${IMAGE_REF} ${{ github.sha }}\"]" \
+            --parameters "commands=[\"sudo /opt/cloudops/deploy.sh ${REG}/cloudops-api:${TAG} ${REG}/cloudops-ui:${TAG} ${{ github.sha }}\"]" \
             --query 'Command.CommandId' --output text)
           echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
           echo "SSM command: $CMD_ID"

@@ -1,0 +1,64 @@
+# Production stack on the EC2 instance (/opt/cloudops/docker-compose.yml). Images come from GHCR.
+name: cloudops-capstone
+
+x-logging: &cw
+  driver: awslogs
+  options: { awslogs-group: /cloudops/capstone, awslogs-create-group: "true", awslogs-stream: "{{.Name}}" }
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cloudops}
+      POSTGRES_USER: ${POSTGRES_USER:-cloudops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *cw
+
+  backend:
+    image: ${IMAGE_API:?set IMAGE_API}
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:?missing}
+      GIT_SHA: ${GIT_SHA:-unknown}
+      LOG_FORMAT: json
+      DB_HOST: ${DB_HOST:-db}
+      DB_NAME: ${POSTGRES_DB:-cloudops}
+      DB_USER: ${POSTGRES_USER:-cloudops}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend, edge]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *cw
+
+  frontend:
+    image: ${IMAGE_UI:?set IMAGE_UI}
+    restart: unless-stopped
+    ports: ["80:8080"]
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [edge]
+    logging: *cw
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+volumes:
+  pgdata:

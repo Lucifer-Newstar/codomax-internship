@@ -1,0 +1,13 @@
+# Capstone frontend image: nginx serving the static UI and proxying /api to the backend.
+#   docker build -f docker/Dockerfile.frontend -t cloudops-ui:dev .
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="cloudops-ui" \
+      org.opencontainers.image.source="https://github.com/Lucifer-Newstar/codomax-internship" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/index.html frontend/style.css frontend/app.js /usr/share/nginx/html/
+# unprivileged image listens on 8080 by default; our config says 80, so switch it to 8080
+RUN sed -i 's/listen 80;/listen 8080;/' /etc/nginx/conf.d/default.conf
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://127.0.0.1:8080/nginx-health || exit 1

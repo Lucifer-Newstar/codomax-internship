@@ -27,7 +27,7 @@ if [[ "$DRY_RUN" == false ]]; then
   command -v dnf >/dev/null || die "this script targets AlmaLinux/RHEL 9"
   id cloudops &>/dev/null || die "user 'cloudops' missing — did user-data run? (see /var/log/user-data.log)"
 fi
-need_cmd aws rsync || true
+[[ "$DRY_RUN" == true ]] || need_cmd aws rsync curl
 
 # Region from instance metadata (IMDSv2) so the aws cli works without config.
 if [[ -z "${AWS_REGION:-}" && "$DRY_RUN" == false ]]; then

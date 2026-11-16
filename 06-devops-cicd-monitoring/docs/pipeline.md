@@ -54,12 +54,12 @@ CI — only `main` publishes.
 
 ### Deploy (`deploy.yml`)
 1. **ci** — reuses `ci.yml` (`workflow_call`) so a direct push to main still gets tested.
-2. **build-push** — builds once more with the cache and pushes `ghcr.io/<owner>/cloudops-notes:<sha12>`
-   and `:latest`. Auth = `GITHUB_TOKEN` with `packages: write`. For a manual rollback
+2. **build-push** — builds with the cache and pushes `ghcr.io/<owner>/cloudops-api:<sha12>`,
+   `cloudops-ui:<sha12>` (capstone, plus `:latest`) and `cloudops-notes:<sha12>` (module 04 image). Auth = `GITHUB_TOKEN` with `packages: write`. For a manual rollback
    (`image_tag` input) the build is skipped and the given tag is deployed as-is.
 3. **deploy** — `aws-actions/configure-aws-credentials` exchanges the job's OIDC token for 1-hour
    credentials of `cloudops-github-deploy` (trust policy pins `repo:<owner>/<repo>:ref:refs/heads/main`).
-   `aws ssm send-command` runs `/opt/cloudops/deploy.sh <image> <sha>` on the instance — no SSH
+   `aws ssm send-command` runs `/opt/cloudops/deploy.sh <api-image> <ui-image> <sha>` on the instance — no SSH
    port, no key pair in GitHub. The job polls `get-command-invocation`, prints the instance output
    into the step summary, then curls `APP_URL/health/ready` and checks `git_sha` in `/api/info`
    equals the commit. The job uses the `production` environment, so required reviewers can be

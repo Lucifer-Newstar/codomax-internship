@@ -16,11 +16,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}   # workflow name differs when called from deploy.yml
   cancel-in-progress: true
 
 env:
   APP_DIR: 04-cloud-services/app
+  CAPSTONE_DIR: 07-cloud-devops-capstone
   PYTHON_VERSION: "3.12"
 
 jobs:
@@ -36,12 +37,17 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ env.APP_DIR }}/requirements-dev.txt
 
-      - name: ruff (lint + format check)
-        working-directory: ${{ env.APP_DIR }}
+      - name: ruff (lint + format check) — module 03 app and capstone backend
         run: |
-          pip install --quiet -r requirements-dev.txt
-          ruff check .
-          ruff format --check .
+          pip install --quiet -r ${{ env.APP_DIR }}/requirements-dev.txt
+          for d in ${{ env.APP_DIR }} ${{ env.CAPSTONE_DIR }}/backend; do
+            (cd "$d" && ruff check . && ruff format --check .)
+          done
+
+      - name: cfn-lint (capstone CloudFormation template)
+        run: |
+          pip install --quiet cfn-lint
+          cfn-lint ${{ env.CAPSTONE_DIR }}/infrastructure/cloudformation/*.yml
 
       - name: shellcheck all bash scripts
         run: |
@@ -58,13 +64,16 @@ jobs:
         uses: raven-actions/actionlint@v2
 
   test:
-    name: Tests (pytest + PostgreSQL ${{ matrix.postgres }})
+    name: Tests (${{ matrix.app.name }}, PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
     needs: lint
     strategy:
       fail-fast: false
       matrix:
         postgres: ["16"]
+        app:
+          - { name: notes-app, dir: 04-cloud-services/app }
+          - { name: capstone-api, dir: 07-cloud-devops-capstone/backend }
     services:
       postgres:
         image: postgres:${{ matrix.postgres }}-alpine
@@ -86,22 +95,22 @@ jobs:
           cache-dependency-path: ${{ env.APP_DIR }}/requirements-dev.txt
 
       - name: install
-        working-directory: ${{ env.APP_DIR }}
+        working-directory: ${{ matrix.app.dir }}
         run: pip install --quiet -r requirements-dev.txt
 
       - name: unit + integration tests
-        working-directory: ${{ env.APP_DIR }}
+        working-directory: ${{ matrix.app.dir }}
         env:
           # the service container is published on localhost inside the runner
           TEST_DATABASE_URL: postgresql://cloudops:ci-only-password@localhost:5432/cloudops_test
-        run: pytest -v --junitxml=../../pytest-report.xml
+        run: pytest -v --junitxml="$GITHUB_WORKSPACE/pytest-${{ matrix.app.name }}.xml"
 
       - name: upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-report
-          path: pytest-report.xml
+          name: pytest-report-${{ matrix.app.name }}
+          path: pytest-${{ matrix.app.name }}.xml
           retention-days: 7
 
   docker:
@@ -144,8 +153,30 @@ jobs:
           docker logs ci-web
           docker rm -f ci-web
 
-      - name: compose file validates
+      - name: compose file validates (module 04)
         working-directory: 05-docker-containerization
         run: |
           cp .env.example .env
           docker compose config --quiet
+
+      - name: build capstone images
+        run: |
+          docker build -f ${{ env.CAPSTONE_DIR }}/docker/Dockerfile.backend --build-arg GIT_SHA=${{ github.sha }} \
+                       -t cloudops-api:ci ${{ env.CAPSTONE_DIR }}
+          docker build -f ${{ env.CAPSTONE_DIR }}/docker/Dockerfile.frontend --build-arg GIT_SHA=${{ github.sha }} \
+                       -t cloudops-ui:ci ${{ env.CAPSTONE_DIR }}
+          test "$(docker run --rm cloudops-api:ci id -u)" = "10001"
+
+      - name: capstone stack end-to-end (compose up, UI → API → PostgreSQL)
+        working-directory: ${{ env.CAPSTONE_DIR }}/docker
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only\nSECRET_KEY=ci-only-secret-key\nHTTP_PORT=8090\nIMAGE_TAG=ci\n' > .env
+          docker compose up -d --no-build
+          for _ in $(seq 1 30); do curl -fsS http://localhost:8090/health/ready && break; sleep 2; done
+          curl -fsS http://localhost:8090/ | grep -q "CloudOps"
+          curl -fsS -X POST http://localhost:8090/api/tasks -H 'content-type: application/json' -d '{"title":"ci e2e"}'
+          curl -fsS http://localhost:8090/api/stats
+          curl -fsS http://localhost:8090/metrics | grep cloudops_http_requests_total
+          docker compose ps
+          docker compose logs backend --tail 20
+          docker compose down -v

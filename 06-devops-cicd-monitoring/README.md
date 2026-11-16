@@ -67,6 +67,13 @@ responses from the running container.
 
 ## Part B — CD (one-time setup, then automatic)
 
+> **Note (after module 06):** `deploy.yml` now ships the capstone's two images (`cloudops-api`,
+> `cloudops-ui`) to the host created by the capstone CloudFormation stack
+> ([`07-cloud-devops-capstone/infrastructure/`](../07-cloud-devops-capstone/infrastructure/)).
+> The files in [`deploy/`](deploy/) are the single-image version used while this module was built;
+> they still work for deploying the module 03/04 app by hand with the same mechanism:
+> `aws ssm send-command --instance-ids <id> --document-name AWS-RunShellScript --parameters 'commands=["sudo /opt/cloudops/deploy.sh ghcr.io/<owner>/cloudops-notes:<tag> <sha>"]'`.
+
 ### B1. Prepare the instance (*on the instance*, provisioning)
 
 ```bash
