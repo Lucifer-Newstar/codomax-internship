@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}   # workflow name differs when called from deploy.yml
   cancel-in-progress: true
 
 env:
