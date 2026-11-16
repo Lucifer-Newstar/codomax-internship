@@ -1,75 +1,101 @@
-# Codomax Linux & Cloud Internship
+# Codomax Linux, Cloud & DevOps Internship
 
-Hands-on notes and scripts from my Linux / cloud internship tasks at **Codomax**.
-Everything was done on **AlmaLinux 9** (RHEL-compatible: `dnf`, `firewalld`, `systemctl`, SELinux), with Ubuntu equivalents noted where they differ.
+Hands-on notes, scripts, applications and pipelines from my internship tasks at **Codomax**.
+Modules 1–3 were done on **AlmaLinux 9** (RHEL-compatible: `dnf`, `firewalld`, `systemctl`,
+SELinux) with Ubuntu equivalents noted; modules 4–7 add AWS, Docker, GitHub Actions and a capstone
+project. One application — **CloudOps Notes → CloudOps board** — evolves through modules 4–7
+instead of four separate exercises.
 
-## Tasks
+## Learning roadmap
 
-| # | Task | Folder |
-|---|---|---|
-| 1 | Learn Linux CLI operations, files/permissions, users, groups, process management, services, and SSH keys | [`01-linux-cli/`](01-linux-cli/) |
-| 2 | Learn IP addressing, DNS setup, ports, firewalls, and security group configurations | [`02-networking/`](02-networking/) |
-| 3 | Deploy a Linux server: Create VM → Configure Linux → Secure Access → Deploy Service → Test Connectivity | [`03-linux-server-deploy/`](03-linux-server-deploy/) |
-| 4 | Cloud services & web app deployment: EC2, S3, RDS, VPC, IAM, CloudWatch, SSM secrets, cost control — the **CloudOps Notes** app goes live on AWS | [`04-cloud-services/`](04-cloud-services/) |
-| 5 | Docker & containerization: multi-stage image, compose stack (nginx → app → PostgreSQL), volumes, networking | [`05-docker-containerization/`](05-docker-containerization/) |
-| 6 | DevOps, CI/CD & monitoring: GitHub Actions CI (lint, tests, image), CD to EC2 via OIDC + SSM, container logs, CloudWatch | [`06-devops-cicd-monitoring/`](06-devops-cicd-monitoring/) |
+```
+Linux CLI ─▶ Networking ─▶ Linux server deploy ─▶ Cloud infrastructure (AWS)
+                                                        │
+                                                        ▼
+                                         Web application deployment (EC2 + RDS + S3)
+                                                        │
+                                                        ▼
+                                              Docker containerization
+                                                        │
+                                                        ▼
+                                          CI/CD automation (GitHub Actions)
+                                                        │
+                                                        ▼
+                                          Monitoring & observability (CloudWatch)
+                                                        │
+                                                        ▼
+                                 Integrated Cloud & DevOps capstone (CloudOps platform)
+```
+
+| # | Module | Folder | Status |
+|---|---|---|---|
+| 1 | Linux CLI: files/permissions, users, groups, processes, services, SSH keys | [`01-linux-cli/`](01-linux-cli/) | done |
+| 2 | Networking: IP addressing, DNS, ports, firewalls, security groups | [`02-networking/`](02-networking/) | done |
+| 3 | Deploy a Linux server: VM → configure → secure → nginx → test | [`03-linux-server-deploy/`](03-linux-server-deploy/) | done |
+| 4 | **Cloud services & web app deployment** — EC2, S3, RDS, VPC, IAM, CloudWatch, SSM secrets, cost control; the Flask + PostgreSQL app goes live on AWS | [`04-cloud-services/`](04-cloud-services/) | done |
+| 5 | **Docker & containerization** — multi-stage non-root image, compose stack (nginx → app → PostgreSQL), volumes, networks | [`05-docker-containerization/`](05-docker-containerization/) | done |
+| 6 | **DevOps, CI/CD & monitoring** — GitHub Actions CI (lint, tests with PostgreSQL, image), CD via OIDC + SSM with rollback, container logs, CloudWatch | [`06-devops-cicd-monitoring/`](06-devops-cicd-monitoring/) | done |
+| 7 | **Capstone: CloudOps platform** — UI + REST API + PostgreSQL, Docker Compose, CloudFormation, CI/CD, monitoring, runbook | [`07-cloud-devops-capstone/`](07-cloud-devops-capstone/) | done (live URL pending an AWS account) |
+
+CI status for this repository: *Actions → CI*. The `Deploy` workflow runs on `main` and skips the
+AWS step until the repository variables are set (see module 6).
 
 ## Repo map
 
 ```
-codomax-linux-cloud-internship/
-├── 01-linux-cli/
-│   ├── notes.md                    # files, permissions, users/groups, processes, systemd, SSH keys
-│   └── scripts/
-│       ├── user_setup.sh           # create user + group, sudo via wheel (dry-run supported)
-│       ├── permissions_demo.sh     # chmod / umask / SUID-SGID-sticky demo in a temp dir
-│       ├── process_monitor.sh      # read-only health snapshot (load, memory, top processes, services)
-│       └── ssh_key_setup.sh        # ed25519 key, perms, ssh-copy-id, key-only login test
-├── 02-networking/
-│   ├── notes.md                    # IPv4, subnetting, DNS, ports, firewalld, security groups vs NACLs
-│   ├── security-group-example.json # example AWS-style web server security group
-│   └── scripts/
-│       ├── firewall_setup.sh       # firewalld: ssh/http/https, optional SSH-from-one-IP rule
-│       ├── dns_check.sh            # A/AAAA/CNAME/MX/TXT/NS lookup + resolver config
-│       └── port_check.sh           # ss -tulnp + nc/curl port tests
-├── 03-linux-server-deploy/
-│   ├── steps.md                    # full walkthrough of the 5 stages
-│   ├── scripts/
-│   │   ├── provision.sh            # dnf update, nginx, firewall, deploy page, SELinux labels
-│   │   ├── harden_ssh.sh           # key-only SSH, no root login, backup + sshd -t before restart
-│   │   └── test_connectivity.sh    # PASS/FAIL checks, on the server or from my laptop
-│   ├── site/index.html             # the page nginx serves
-│   └── screenshots/                # screenshots of my run
-├── LICENSE
-└── README.md
+codomax-internship/
+├── 01-linux-cli/                 notes.md + scripts (user_setup, permissions_demo, process_monitor, ssh_key_setup)
+├── 02-networking/                notes.md, security-group-example.json, scripts (firewall_setup, dns_check, port_check)
+├── 03-linux-server-deploy/       steps.md, scripts (provision, harden_ssh, test_connectivity), site/, screenshots/
+├── 04-cloud-services/
+│   ├── app/                      CloudOps Notes: Flask + psycopg, /health, /health/ready, /api/notes, JSON logs, tests
+│   ├── scripts/                  aws_preflight, iam_setup, s3_assets, ec2_launch, rds_create, ssm_params,
+│   │                             cloudwatch_setup, deploy_app (on instance), cost_check, cleanup — all --dry-run
+│   ├── aws/                      iam/ policies, networking.md (VPC diagram + CLI), user-data, systemd, nginx, CW agent
+│   └── README.md
+├── 05-docker-containerization/
+│   ├── Dockerfile  .dockerignore  docker-compose.yml  nginx/  scripts/smoke_test.sh  docker-commands.md
+│   └── README.md
+├── 06-devops-cicd-monitoring/
+│   ├── workflows/                index of the real workflows in .github/workflows
+│   ├── deploy/                   single-image host bootstrap + deploy.sh + prod compose (awslogs)
+│   ├── aws/                      GitHub OIDC trust/permission policies + setup script
+│   ├── monitoring/               healthcheck.sh, docker_stats_snapshot.sh, daemon.json, Logs Insights queries
+│   ├── docs/                     git-workflow.md, pipeline.md, observability.md
+│   └── README.md
+├── 07-cloud-devops-capstone/
+│   ├── frontend/  backend/  database/  docker/  infrastructure/  docs/  screenshots/
+│   └── README.md
+├── .github/workflows/
+│   ├── ci.yml                    lint → pytest (2 apps × PostgreSQL service) → docker builds → compose e2e
+│   └── deploy.yml                main only: GHCR push → OIDC → SSM deploy → health + sha verification
+├── .gitignore  LICENSE  README.md
 ```
 
-## How to use
+## Quick start
 
-On the AlmaLinux VM:
 ```bash
-sudo dnf install -y git
-git clone https://github.com/Lucifer-Newstar/codomax-linux-cloud-internship.git
-cd codomax-linux-cloud-internship
-chmod +x */scripts/*.sh
+git clone https://github.com/Lucifer-Newstar/codomax-internship.git && cd codomax-internship
+
+# modules 1–3 (on an AlmaLinux VM) — see 03-linux-server-deploy/steps.md
+# module 4 app locally
+cd 04-cloud-services/app && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt && pytest
+# module 5 stack
+cd ../../05-docker-containerization && cp .env.example .env && docker compose up -d --build && ./scripts/smoke_test.sh
+# module 7 capstone
+cd ../07-cloud-devops-capstone/docker && cp .env.example .env && docker compose up -d --build   # http://localhost:8080
 ```
 
-Then follow [`03-linux-server-deploy/steps.md`](03-linux-server-deploy/steps.md). Short version:
-```bash
-# on the server
-sudo ./01-linux-cli/scripts/user_setup.sh devuser devops --sudo
-# on my laptop
-./01-linux-cli/scripts/ssh_key_setup.sh devuser@<server-ip>
-# on the server, logged in as devuser
-sudo ./03-linux-server-deploy/scripts/harden_ssh.sh
-sudo ./02-networking/scripts/firewall_setup.sh
-sudo ./03-linux-server-deploy/scripts/provision.sh
-sudo ./03-linux-server-deploy/scripts/test_connectivity.sh
-# from my laptop
-./03-linux-server-deploy/scripts/test_connectivity.sh <server-ip> devuser
-```
+Cloud steps (EC2/RDS/S3, CloudFormation, OIDC) are in each module's README and are explicit about
+what provisions resources, what costs money and how to clean up. No credentials or `.env` files are
+committed; secrets live in SSM Parameter Store or on the host.
 
-Every script that changes the system checks for root and supports `--dry-run` (or asks before anything risky), so you can see what it will do first. All scripts use `set -euo pipefail` and pass `shellcheck`.
+## Git workflow
+
+One branch per module (`feature/04-cloud-services`, `feature/05-docker-containerization`,
+`feature/06-devops-cicd-monitoring`, `feature/07-cloud-devops-capstone`), merged into `main` with
+`--no-ff` when the module is complete. Commit convention: `<scope>: <change>` — see
+[`06-devops-cicd-monitoring/docs/git-workflow.md`](06-devops-cicd-monitoring/docs/git-workflow.md).
 
 ## Skills learned
 
@@ -84,6 +110,11 @@ Every script that changes the system checks for root and supports `--dry-run` (o
 - **Ports & firewalls:** `ss -tulnp`, `nc`, firewalld zones/services/rich rules, SELinux port labels
 - **Cloud security:** security groups (stateful) vs NACLs (stateless), least-privilege inbound rules
 - **Deployment:** VM setup, hardening, nginx, SELinux file contexts, connectivity testing
+- **AWS:** EC2 (AMI, key pairs, instance roles, IMDSv2), S3 (private buckets, pre-signed URLs), RDS PostgreSQL, VPC/subnets/routing, IAM least privilege & OIDC, SSM Parameter Store + Run Command, CloudWatch logs/metrics/alarms/dashboards, Budgets, CloudFormation
+- **Application:** Flask app factory, env-based config, health vs readiness, structured JSON logging, request IDs, Prometheus-style metrics, pytest unit + integration tests
+- **Docker:** multi-stage builds, non-root images, health checks, `.dockerignore`, user-defined/internal networks, named volumes, Compose dependencies and resource limits
+- **CI/CD:** GitHub Actions jobs/matrices/services/artifacts, reusable workflows, GHCR, keyless AWS auth, deployment verification and rollback
+- **Observability:** logs vs metrics vs traces, synthetic monitoring, alarm design, Logs Insights
 
 ## License
 
