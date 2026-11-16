@@ -7,11 +7,13 @@ def test_postgres_roundtrip(pg_app):
     assert r.status_code == 200, r.get_json()
     assert r.get_json()["database"]["backend"] == "postgres"
 
+    store = pg_app.extensions["notes_store"]
+    before = store.count()  # the database may already hold rows from manual testing
     r = client.post("/api/notes", json={"title": "pg note", "body": "stored in PostgreSQL"})
     assert r.status_code == 201
     note_id = r.get_json()["id"]
     assert client.get(f"/api/notes/{note_id}").get_json()["body"] == "stored in PostgreSQL"
-    assert pg_app.extensions["notes_store"].count() == 1
+    assert store.count() == before + 1
 
 
 def test_readiness_reports_db_down(monkeypatch, tmp_path):
