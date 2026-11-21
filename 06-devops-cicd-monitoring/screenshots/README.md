@@ -11,7 +11,7 @@
 | `07-oidc-role.png` | IAM role `cloudops-github-deploy` trust policy showing the `sub` condition — created with `aws/github_oidc_setup.sh` on 21 Nov 2026 | ✅ captured |
 | `08-deployment-verified.png` | Deploy job "verify deployment health" step + the app in the browser | ✅ captured (real OIDC+SSM deploy run #3, 21 Nov 2026) |
 | `09-cloudwatch-container-logs.png` | Log group `/cloudops/docker` with the `cloudops-web-*` stream | pending — the capstone stack logs to `/cloudops/capstone` instead (see capstone `07-cloudwatch-logs.png`) |
-| `10-docker-stats.png` | `monitoring/docker_stats_snapshot.sh` output | pending AWS |
+| `10-docker-stats.png` | `monitoring/docker_stats_snapshot.sh` output | ✅ captured (21 Nov 2026, EC2 host) |
 | `11-healthcheck.png` | `monitoring/healthcheck.sh once` → 5× ok — captured locally against the module-4 app on 21 Nov 2026 | ✅ captured |
 
 Local validation re-recorded on 21 Nov 2026 (against the module-4 app on gunicorn + real PostgreSQL 16.2):
