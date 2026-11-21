@@ -18,7 +18,7 @@ real local PostgreSQL 16):
 | `08-cloudwatch-logs.png` | Log group `/cloudops/app` showing JSON request lines | pending AWS |
 | `09-cloudwatch-alarms.png` | the three alarms in OK state, or the dashboard | pending AWS |
 | `10-local-tests.png` | `pytest` output (17 passed against real PostgreSQL) and `shellcheck` clean | ✅ captured |
-| `11-cleanup.png` | `cleanup.sh` output and `cost_check.sh running` showing nothing left | pending AWS |
+| `11-cleanup.png` | capstone stack `deploy_stack.sh down` + `cost_check.sh` after teardown: instance terminated, nothing left | ✅ captured (21 Nov 2026) |
 
 Local run re-recorded on 21 Nov 2026 (Python 3.12, real local PostgreSQL 16.2, no AWS account used):
 
