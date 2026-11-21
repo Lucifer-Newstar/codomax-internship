@@ -5,9 +5,14 @@
 #   cloudwatch : like once, but also publish Availability (0/1) and LatencyMs to CloudWatch
 #                namespace CloudOps (needs cloudwatch:PutMetricData — the EC2 role has it)
 # Usage: ./healthcheck.sh [once|watch|cloudwatch] [base-url] [--interval 30]
+# Probes default to the CloudOps Notes routes; override with PROBES for other apps, e.g. the
+# capstone: PROBES="/health 200 /health/ready 200 /api/tasks 200 /api/info 200 /metrics 200"
 set -euo pipefail
+# cron gives a minimal PATH; aws/curl live in /usr/local/bin on the EC2 host
+PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 MODE="${1:-once}"; BASE="${2:-http://localhost:8080}"; INTERVAL=30
 [[ "${3:-}" == "--interval" ]] && INTERVAL="${4:-30}"
+PROBES="${PROBES:-/health 200 /health/ready 200 /api/notes 200 /api/info 200 /nope 404}"
 need() { command -v "$1" >/dev/null || { echo "missing: $1" >&2; exit 1; }; }
 need curl
 
@@ -19,11 +24,12 @@ probe() { # path expected-code -> prints "code latency_ms"
 
 run_once() {
   local fails=0 total_ms=0 line code ms status
-  for spec in "/health 200" "/health/ready 200" "/api/notes 200" "/api/info 200" "/nope 404"; do
-    # shellcheck disable=SC2086  # intentional split of "path code"
-    set -- $spec
-    line="$(probe "$1" "$2")"; read -r code ms status <<<"$line"
-    printf '%-14s %s  %4d ms  %s\n' "$1" "$code" "$ms" "$status"
+  # shellcheck disable=SC2086  # intentional word-split of PROBES into "path code" pairs
+  set -- $PROBES
+  while [[ $# -ge 2 ]]; do
+    local path="$1" want="$2"; shift 2
+    line="$(probe "$path" "$want")"; read -r code ms status <<<"$line"
+    printf '%-14s %s  %4d ms  %s\n' "$path" "$code" "$ms" "$status"
     [[ "$status" == ok ]] || fails=$((fails+1))
     total_ms=$((total_ms+ms))
   done

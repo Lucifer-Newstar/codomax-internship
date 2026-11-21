@@ -183,4 +183,4 @@ volume), role, security group, alarms and log group. Verify with
 - [x] Architecture diagram (`docs/architecture.md`)
 - [x] README documentation (this file, runbook)
 - [x] Screenshots checklist (`screenshots/`)
-- [ ] Live deployment URL — not published (no AWS account attached while building; see above)
+- [x] Live deployment URL — deployed and verified live on 21 Nov 2026 (CloudFormation stack `cloudops-capstone-prod`, EC2 t3.micro in ap-south-1, board + API + DB all green; see `screenshots/`). Torn down the same day to avoid ongoing cost, so no permanent URL.

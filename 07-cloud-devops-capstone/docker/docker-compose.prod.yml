@@ -1,9 +1,8 @@
 # Production stack on the EC2 instance (/opt/cloudops/docker-compose.yml). Images come from GHCR.
 name: cloudops-capstone
 
-x-logging: &cw
-  driver: awslogs
-  options: { awslogs-group: /cloudops/capstone, awslogs-create-group: "true", awslogs-stream: "{{.Name}}" }
+# awslogs does not expand docker log-tag templates like {{.Name}} - a literal "{{.Name}}" becomes
+# the stream name for every container. Each service gets its own explicit stream below.
 
 services:
   db:
@@ -20,7 +19,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    logging: *cw
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /cloudops/capstone, awslogs-create-group: "true", awslogs-stream: cloudops-capstone-db }
 
   backend:
     image: ${IMAGE_API:?set IMAGE_API}
@@ -44,7 +45,9 @@ services:
     deploy:
       resources:
         limits: { cpus: "0.50", memory: 256M }
-    logging: *cw
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /cloudops/capstone, awslogs-create-group: "true", awslogs-stream: cloudops-capstone-backend }
 
   frontend:
     image: ${IMAGE_UI:?set IMAGE_UI}
@@ -53,7 +56,9 @@ services:
     depends_on:
       backend: { condition: service_healthy }
     networks: [edge]
-    logging: *cw
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /cloudops/capstone, awslogs-create-group: "true", awslogs-stream: cloudops-capstone-frontend }
 
 networks:
   edge:
