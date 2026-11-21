@@ -35,7 +35,7 @@ Linux CLI ─▶ Networking ─▶ Linux server deploy ─▶ Cloud infrastructu
 | 4 | **Cloud services & web app deployment** — EC2, S3, RDS, VPC, IAM, CloudWatch, SSM secrets, cost control; the Flask + PostgreSQL app goes live on AWS | [`04-cloud-services/`](04-cloud-services/) | done |
 | 5 | **Docker & containerization** — multi-stage non-root image, compose stack (nginx → app → PostgreSQL), volumes, networks | [`05-docker-containerization/`](05-docker-containerization/) | done |
 | 6 | **DevOps, CI/CD & monitoring** — GitHub Actions CI (lint, tests with PostgreSQL, image), CD via OIDC + SSM with rollback, container logs, CloudWatch | [`06-devops-cicd-monitoring/`](06-devops-cicd-monitoring/) | done |
-| 7 | **Capstone: CloudOps platform** — UI + REST API + PostgreSQL, Docker Compose, CloudFormation, CI/CD, monitoring, runbook | [`07-cloud-devops-capstone/`](07-cloud-devops-capstone/) | done (live URL pending an AWS account) |
+| 7 | **Capstone: CloudOps platform** — UI + REST API + PostgreSQL, Docker Compose, CloudFormation, CI/CD, monitoring, runbook | [`07-cloud-devops-capstone/`](07-cloud-devops-capstone/) | done (deployed live on AWS and verified 21 Nov 2026, then torn down for cost; evidence in `07-cloud-devops-capstone/screenshots/`) |
 
 CI status for this repository: *Actions → CI*. The `Deploy` workflow runs on `main` and skips the
 AWS step until the repository variables are set (see module 6).
