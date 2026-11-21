@@ -7,7 +7,7 @@
 | `03-database-connected.png` | `curl /health/ready` + `curl /api/tasks` against the live host | ✅ captured (live AWS) |
 | `04-docker-containers.png` | on the host: `docker compose -f /opt/cloudops/docker-compose.yml ps` (3 healthy) | ✅ captured |
 | `05-cicd-success.png` | Actions → Deploy run: CI → build & push → deploy, summary with instance output | ✅ captured |
-| `06-deployment-verified.png` | verify step output (`running git_sha=… expected=…`) and GHCR packages page | pending real deploy run (repo variables set 21 Nov 2026; runs on next push to `main`) |
+| `06-deployment-verified.png` | verify step output (`running git_sha=… expected=…`) and GHCR packages page | ✅ captured (real OIDC+SSM deploy run #3, 21 Nov 2026) |
 | `07-cloudwatch-logs.png` | log group `/cloudops/capstone`, streams `cloudops-capstone-{db,backend,frontend}`, JSON lines | ✅ captured |
 | `08-cloudwatch-alarms.png` | the three alarms + `CloudOps/Availability` metric | ✅ captured |
 | `09-metrics-endpoint.png` | `curl http://<host>/metrics` against the live host | ✅ captured (live AWS) |

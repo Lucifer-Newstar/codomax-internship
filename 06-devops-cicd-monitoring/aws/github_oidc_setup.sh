@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # github_oidc_setup.sh — let GitHub Actions deploy WITHOUT storing AWS keys in GitHub.
 #   1. IAM OIDC identity provider for token.actions.githubusercontent.com (one per account)
-#   2. role cloudops-github-deploy that only the main branch of ONE repo can assume
+#   2. role cloudops-github-deploy that only the main branch / production environment of ONE repo can assume
 #   3. permissions: ssm:SendCommand on instances tagged Project=cloudops + read the result
 # Afterwards set the repo variable AWS_ROLE_ARN to the printed ARN.
 #
@@ -19,7 +19,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROLE="cloudops-github-deploy"
 PROVIDER_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
 
-render() { sed -e "s|\${AWS_ACCOUNT_ID}|$AWS_ACCOUNT_ID|g" -e "s|\${AWS_REGION}|$AWS_REGION|g" -e "s|\${GITHUB_REPO}|$GITHUB_REPO|g" "$1"; }
+render() { sed -e "s|\${AWS_ACCOUNT_ID}|$AWS_ACCOUNT_ID|g" -e "s|\${AWS_REGION}|$AWS_REGION|g" -e "s|\${GITHUB_REPO_OWNER}|${GITHUB_REPO%/*}|g" -e "s|\${GITHUB_REPO_NAME}|${GITHUB_REPO#*/}|g" -e "s|\${GITHUB_REPO}|$GITHUB_REPO|g" "$1"; }
 TRUST="$(mktemp)"; PERMS="$(mktemp)"; trap 'rm -f "$TRUST" "$PERMS"' EXIT
 render "$HERE/github-oidc-trust-policy.json" > "$TRUST"
 render "$HERE/github-deploy-policy.json" > "$PERMS"
@@ -34,7 +34,7 @@ else
     --client-id-list sts.amazonaws.com --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 fi
 
-step "2. Role $ROLE (trusts only repo:$GITHUB_REPO:ref:refs/heads/main)"
+step "2. Role $ROLE (trusts repo:$GITHUB_REPO main ref + production environment)"
 if [[ "$DRY_RUN" == false ]] && aws iam get-role --role-name "$ROLE" >/dev/null 2>&1; then
   run aws iam update-assume-role-policy --role-name "$ROLE" --policy-document "file://$TRUST"
 else
